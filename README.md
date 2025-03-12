@@ -16,7 +16,7 @@ Also, we provide with Python Notebooks to illustrate the different concepts.
 
 This material has been created by 
 
-- Pablo Martínez Olmos (olmos@tsc.uc3m.es)
+- Pablo Martínez Olmos (pamartin@ing.uc3m.es)
 
 and it is distributed under the [MIT License](https://choosealicense.com/licenses/mit/).
 
