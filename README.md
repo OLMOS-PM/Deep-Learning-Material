@@ -1,12 +1,12 @@
 # Deep Learning
 
-Teaching material used for the course [Deep Learning](https://www.uc3m.es/master/machine-learning-health?d=Desktop) in the Master on Machine Learning for Health at Universidad Carlos III Madrid. 
+Teaching material used for the course [Deep Learning](https://www.uc3m.es/bachelor-degree/data-science#program) in the Bachelor in Data Science and Engineering at Universidad Carlos III Madrid. 
 
 We provide the source code for the slides used in the lectures of the course:
 1. Dense Neural Networks. Training, Validation and Regularization
 2. Convolutional Neural Networks & Graph Neural Networks
 3. Recurrent Neural Networks
-4. Attention mechanisms and NLP
+4. Attention mechanisms, transformers and NLP
 5. Unsupervised deep learning: autoregressive models
 6. Deep Latent Variable Models. VAEs.
 7. GANs
