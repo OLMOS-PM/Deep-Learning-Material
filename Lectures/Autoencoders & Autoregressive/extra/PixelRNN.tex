@@ -1,0 +1,217 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\title{Detailed Review of PixelRNN Architecture}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+\section{Introduction to PixelRNN}
+PixelRNN is a two-dimensional autoregressive model designed for image generation. The model predicts each pixel value in an image by conditioning on previously generated pixels, following a raster-scan order, typically from left-to-right and top-to-bottom. Each pixel intensity is modeled as a probability distribution conditioned on previous pixels, allowing PixelRNN to capture complex dependencies across pixels.
+
+The model comprises layers of LSTM units adapted to two-dimensional spatial data, using specialized layers like Row LSTM and Diagonal BiLSTM to capture dependencies effectively across rows and diagonals. Additionally, residual connections help stabilize training in deeper networks.
+
+\section{Autoregressive Modeling in PixelRNN}
+For a given image \( I \) with pixel values \( \mathbf{x}_{i,j} \) at location \( (i, j) \), PixelRNN models the joint probability distribution as follows:
+
+\begin{equation}
+    p(I) = \prod_{i=1}^H \prod_{j=1}^W p(\mathbf{x}_{i,j} | \mathbf{x}_{<i,j}),
+\end{equation}
+
+where \( H \) and \( W \) denote the height and width of the image, and \( \mathbf{x}_{<i,j} \) represents all pixels that precede \( (i, j) \) in raster scan order. This autoregressive formulation enables PixelRNN to predict each pixel based on those generated prior to it.
+
+\section{Row LSTM Layer}
+The \textbf{Row LSTM} layer processes each row of the image sequentially from left to right, capturing horizontal dependencies. For each row \( r \) and pixel \( j \) in that row, the Row LSTM updates its hidden state \( h_{r,j} \) based on the previous hidden state \( h_{r,j-1} \) and the current pixel input \( x_{r,j} \):
+
+\begin{equation}
+    h_{r,j} = \text{LSTM}(x_{r,j}, h_{r,j-1}),
+\end{equation}
+
+where the LSTM cell processes each pixel along the row, capturing dependencies among pixels within a row. The hidden state \( h_{r,j} \) carries information about all pixels to the left of \( j \) in row \( r \), which provides horizontal context.
+
+\subsection{Intuition}
+The Row LSTM acts like a memory along each row, where each pixel can ``see'' pixels to its left. This is beneficial for learning features such as object boundaries and horizontal textures.
+
+\section{Diagonal BiLSTM Layer}
+The \textbf{Diagonal BiLSTM} layer captures dependencies across the image diagonally, allowing the model to incorporate horizontal and vertical dependencies.
+
+For a pixel at \( (i, j) \), the Diagonal BiLSTM updates its hidden state \( h_{i,j} \) by considering pixels from both the previous row and previous column:
+
+\begin{equation}
+    h_{i,j} = \text{BiLSTM}(x_{i,j}, h_{i-1,j-1}, h_{i-1,j+1}),
+\end{equation}
+
+which allows bidirectional processing across rows and columns, capturing complex spatial dependencies.
+
+\subsection{Intuition}
+The Diagonal BiLSTM captures complex dependencies across the image by integrating information from multiple directions, beneficial for modeling textures, edges, and other spatial relationships.
+
+\section{Residual Connections}
+PixelRNN uses \textbf{residual connections} to stabilize training and improve convergence in deep networks. For each LSTM layer output \( h_{l} \), the residual connection adds the layer's input to its output:
+
+\begin{equation}
+    h_{l+1} = h_{l} + \text{LSTM}(h_{l}).
+\end{equation}
+
+This technique preserves information across layers by passing features directly, enhancing training efficiency for networks with a deep architecture.
+
+\section{Output Layer and Multinomial Distribution}
+Each pixel value is treated as a discrete category using a multinomial distribution. For color images, the RGB channels are predicted jointly, with each channel conditioned on the other. The softmax layer provides a probability distribution for each channel:
+
+\begin{equation}
+    p(\mathbf{x}_{i,j}) = \text{Softmax}(W h_{i,j} + b),
+\end{equation}
+
+where \( W \) and \( b \) are learnable parameters that map the hidden state \( h_{i,j} \) to output probabilities.
+
+\subsection{Intuition}
+Using a multinomial distribution allows PixelRNN to model pixel intensities naturally as discrete categories, leading to better learning outcomes in color images.
+
+\section{PixelCNN as an Alternative}
+PixelCNN simplifies PixelRNN by replacing LSTM layers with masked convolutions, which ensure that each pixel prediction is based only on preceding pixels.
+
+\subsection{Masked Convolutions}
+In PixelCNN, masks are applied to convolutional filters to prevent each pixel from seeing ``future'' pixels. The convolutional operation can be written as:
+
+\begin{equation}
+    h_{i,j} = \sum_{k,l} W_{k,l} \cdot x_{i-k, j-l} \quad \text{subject to } k \leq i \text{ and } l \leq j,
+\end{equation}
+
+where \( W \) is the convolutional kernel and the mask restricts it to positions preceding \( (i, j) \).
+
+\subsection{Fully Convolutional Structure}
+PixelCNN maintains spatial resolution throughout, using no pooling layers. Masked convolutions enable the network to capture spatial dependencies while being computationally efficient.
+
+\subsection{Intuition}
+The PixelCNN architecture allows efficient training and evaluation by leveraging the convolutional layer’s parallelism, albeit at a slight trade-off in the expressiveness compared to PixelRNN.
+
+\section{Conclusion}
+PixelRNN and PixelCNN represent two powerful autoregressive architectures for image generation, each with unique approaches to capturing spatial dependencies. PixelRNN’s Row LSTM and Diagonal BiLSTM layers enable rich, two-dimensional context across pixels, while residual connections stabilize deeper networks. PixelCNN provides a simpler alternative using masked convolutions, which enhances training efficiency but retains the ability to model dependencies across the image.
+
+PixelRNN is well-suited for tasks requiring intricate spatial dependency modeling, while PixelCNN provides computational advantages with competitive performance in scenarios favoring parallel processing.
+
+
+\section{Introduction to LSTM}
+The Long Short-Term Memory (LSTM) network is a type of recurrent neural network (RNN) designed to address the issue of \textit{vanishing gradients} that can occur in standard RNNs. Proposed by Hochreiter and Schmidhuber in 1997, the LSTM incorporates memory cells and gating mechanisms to enable the network to capture long-term dependencies and retain relevant information over extended time sequences.
+
+\section{Structure of an LSTM Cell}
+An LSTM cell is structured with three primary gates:
+\begin{itemize}
+    \item \textbf{Forget Gate} \( f_t \): Controls what portion of the previous cell state \( C_{t-1} \) should be retained.
+    \item \textbf{Input Gate} \( i_t \): Determines the extent to which new information \( \tilde{C}_t \) is added to the cell state.
+    \item \textbf{Output Gate} \( o_t \): Regulates the amount of information from the cell state \( C_t \) that flows into the hidden state \( h_t \).
+\end{itemize}
+
+The LSTM cell state \( C_t \) acts as a memory that carries information over time steps, while the hidden state \( h_t \) represents the cell's output at each step.
+
+\section{Mathematical Formulation}
+Let \( x_t \) denote the input vector at time step \( t \), \( h_{t-1} \) the hidden state from the previous time step, and \( C_{t-1} \) the cell state from the previous time step. The LSTM equations are as follows:
+
+\subsection{Forget Gate}
+The forget gate \( f_t \) decides how much of the previous cell state \( C_{t-1} \) to retain:
+
+\begin{equation}
+    f_t = \sigma \left( W_f \cdot \begin{bmatrix} h_{t-1} \\ x_t \end{bmatrix} + b_f \right),
+\end{equation}
+
+where:
+\begin{itemize}
+    \item \( W_f \) is the weight matrix for the forget gate,
+    \item \( b_f \) is the bias term for the forget gate,
+    \item \( \sigma \) is the sigmoid activation function, which outputs values between 0 and 1.
+\end{itemize}
+
+The forget gate's output \( f_t \) is a vector of values between 0 and 1, where each element indicates how much of each component of \( C_{t-1} \) to retain.
+
+\subsection{Input Gate}
+The input gate \( i_t \) controls how much new information \( \tilde{C}_t \) is added to the cell state:
+
+\begin{equation}
+    i_t = \sigma \left( W_i \cdot \begin{bmatrix} h_{t-1} \\ x_t \end{bmatrix} + b_i \right),
+\end{equation}
+
+where:
+\begin{itemize}
+    \item \( W_i \) is the weight matrix for the input gate,
+    \item \( b_i \) is the bias term for the input gate.
+\end{itemize}
+
+The input gate's output \( i_t \) determines which parts of the candidate cell state \( \tilde{C}_t \) to add to the current cell state \( C_t \).
+
+\subsection{Candidate Cell State}
+The candidate cell state \( \tilde{C}_t \) is a vector of new information that could be added to the cell state:
+
+\begin{equation}
+    \tilde{C}_t = \tanh \left( W_C \cdot \begin{bmatrix} h_{t-1} \\ x_t \end{bmatrix} + b_C \right),
+\end{equation}
+
+where:
+\begin{itemize}
+    \item \( W_C \) is the weight matrix for the candidate cell state,
+    \item \( b_C \) is the bias term for the candidate cell state,
+    \item \( \tanh \) is the hyperbolic tangent function, which outputs values between -1 and 1.
+\end{itemize}
+
+The candidate cell state \( \tilde{C}_t \) represents potential new information that the LSTM can add to the current cell state.
+
+\subsection{Cell State Update}
+The current cell state \( C_t \) is updated by combining the previous cell state \( C_{t-1} \) (modulated by the forget gate) and the candidate cell state \( \tilde{C}_t \) (modulated by the input gate):
+
+\begin{equation}
+    C_t = f_t \odot C_{t-1} + i_t \odot \tilde{C}_t,
+\end{equation}
+
+where \( \odot \) represents element-wise multiplication. This equation allows the LSTM to selectively retain past information and add new information.
+
+\subsection{Output Gate and Hidden State}
+The output gate \( o_t \) controls how much of the cell state \( C_t \) is passed to the hidden state \( h_t \), which is also the output of the LSTM cell:
+
+\begin{equation}
+    o_t = \sigma \left( W_o \cdot \begin{bmatrix} h_{t-1} \\ x_t \end{bmatrix} + b_o \right),
+\end{equation}
+
+where:
+\begin{itemize}
+    \item \( W_o \) is the weight matrix for the output gate,
+    \item \( b_o \) is the bias term for the output gate.
+\end{itemize}
+
+The hidden state \( h_t \) is then computed as:
+
+\begin{equation}
+    h_t = o_t \odot \tanh(C_t).
+\end{equation}
+
+The hidden state \( h_t \) provides a representation of the current time step’s output, which can be passed to the next time step in a sequence or to other network layers.
+
+\section{Summary of LSTM Computation Steps}
+To summarize the steps of an LSTM cell:
+\begin{enumerate}
+    \item Compute the forget gate \( f_t \).
+    \item Compute the input gate \( i_t \).
+    \item Compute the candidate cell state \( \tilde{C}_t \).
+    \item Update the cell state \( C_t = f_t \odot C_{t-1} + i_t \odot \tilde{C}_t \).
+    \item Compute the output gate \( o_t \).
+    \item Compute the hidden state \( h_t = o_t \odot \tanh(C_t) \).
+\end{enumerate}
+
+These steps are repeated at each time step \( t \) in the sequence, allowing the LSTM to capture long-range dependencies by retaining relevant information in the cell state \( C_t \).
+
+\section{Intuition and Advantages of LSTM}
+The main advantage of the LSTM is its ability to control the flow of information through time using the gating mechanisms, which helps it mitigate the vanishing gradient problem. The cell state \( C_t \) acts as a memory that can retain information across long sequences, while the forget, input, and output gates modulate which information is kept, updated, or revealed. This flexibility allows LSTMs to learn dependencies over long time periods, making them suitable for tasks such as language modeling, sequence prediction, and time-series forecasting.
+
+\section{Conclusion}
+The LSTM layer represents an effective solution to the challenge of learning long-term dependencies in sequential data. By maintaining a cell state and controlling information flow with gates, the LSTM can avoid the vanishing gradient problem and retain important information over extended sequences. This detailed mathematical framework provides the basis for understanding how LSTMs capture complex temporal patterns in data.
+
+% \bibliographystyle{plain}
+% \bibliography{}
+
+\end{document}

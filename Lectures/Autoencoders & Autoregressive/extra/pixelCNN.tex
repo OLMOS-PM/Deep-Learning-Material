@@ -1,0 +1,85 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{amsmath,amssymb,graphicx,hyperref}
+\usepackage{xcolor}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
+
+\title{Causal Convolutions in 2D: PixelCNN}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section*{Causal Convolutions in PixelCNN}
+
+PixelCNN extends the idea of \textbf{causal convolutions} from one-dimensional sequences (as in WaveNet) to two-dimensional images. In this setting, the goal is to model the joint distribution of image pixels autoregressively:
+P(\mathbf{x}) = \prod_{i,j} P(x_{i,j} \mid x_{<i, <j})
+where each pixel x_{i,j} is conditioned only on the previously generated pixels in raster-scan order (top to bottom, left to right). Ensuring that the model respects this ordering is the key motivation behind causal convolutions in 2D.
+
+\section*{From 1D to 2D Causal Convolutions}
+In 1D (e.g., for audio), causal convolutions ensure that when predicting the value at position t, the network only has access to positions < t. This is achieved by shifting the convolution kernel so that it never includes future time steps.
+
+For 2D images, the same principle must be applied to both spatial dimensions (height and width). Each pixel can depend only on those that come before it in raster order—that is, all pixels in the previous rows and the pixels to the left within the same row.
+
+\section*{Two-Dimensional Causality}
+To achieve this, PixelCNN employs masked 2D convolutions. These convolutions enforce a 2D notion of causality:
+\begin{itemize}
+\item \textbf{Vertical (row-wise) causality}: Pixels in row i can depend only on pixels in rows < i.
+\item \textbf{Horizontal (column-wise) causality}: Within a given row, pixel j can depend only on pixels with column indices < j.
+\end{itemize}
+
+The model maintains the full 2D structure of the image while ensuring that no future pixels (either below or to the right) are accessible when predicting the next pixel.
+
+\section*{Two Causal Convolutions: Upper and Left Parts}
+The original PixelCNN design achieves 2D causality using two separate convolutional layers:
+
+\begin{enumerate}
+\item \textbf{Upper (vertical) convolution}: This convolution covers the upper part of the receptive field. It includes all pixels above the current one (rows < i) but excludes the current and future rows. This enforces causality in the vertical direction.
+
+\item \textbf{Left (horizontal) convolution}: This convolution covers the left part of the receptive field within the same row. It includes pixels with columns < j in the current row. This enforces causality in the horizontal direction.
+\end{enumerate}
+
+Both convolutions are causal: the first one ensures that no information leaks from future rows, while the second ensures that no information leaks from future columns within the same row. Together, they define the valid receptive field for each pixel according to the autoregressive ordering.
+
+\section*{Why the Left Convolution is 2D}
+Although it enforces horizontal causality, the left convolution is implemented as a 2D convolution. There are several reasons for this:
+\begin{itemize}
+\item The image itself is a 2D tensor with shape C \times H \times W, and using Conv2D maintains the spatial structure and parallelism across the whole image.
+\item The features being processed already mix vertical and horizontal information from previous layers, so restricting to a purely 1D convolution would lose spatial coherence.
+\item The causality constraint is implemented via a mask on the 2D kernel, which zeroes out the connections to future (non-causal) positions.
+\end{itemize}
+
+For instance, a masked 3$\times$3 convolution for the left part might look like:
+\text{Mask} = \begin{bmatrix}
+1 & 1 & 0 \\
+1 & 0 & 0 \\
+0 & 0 & 0
+\end{bmatrix}
+indicating that the kernel covers only the upper and left pixels, but never the current or future ones.
+
+\section*{Masked Convolutions in Practice}
+In practice, two types of masks are commonly used in PixelCNN:
+\begin{itemize}
+\item \textbf{Mask A}: Used in the first layer to prevent the network from seeing the current pixel itself.
+\item \textbf{Mask B}: Used in subsequent layers, allowing access to the current pixel’s own feature maps from previous layers (but still not to future pixels).
+\end{itemize}
+
+These masks are applied directly to the convolutional kernels, ensuring causality while allowing for efficient parallel computation across all pixels.
+
+\section*{Output Distribution and Softmax}
+Each pixel’s intensity value (e.g., 0–255 for grayscale images) is modeled as a categorical distribution. The network outputs logits that are passed through a softmax function to produce the conditional probability P(x_{i,j} \mid x_{<i,<j}). During generation, pixels are sampled sequentially according to this conditional distribution.
+
+\section*{Summary}
+\begin{itemize}
+\item PixelCNN generalizes causal convolutions to 2D images by enforcing causality along both height and width dimensions.
+\item Two Conv2D layers handle vertical and horizontal dependencies separately: the first covers the upper part (vertical causality) and the second covers the left part (horizontal causality).
+\item Both convolutions are causal, but along different axes.
+\item The left convolution remains 2D for efficiency and spatial consistency; its kernel mask enforces causality.
+\item The model predicts each pixel as a categorical variable, conditioned on all previously generated pixels.
+\end{itemize}
+
+\section*{Reference}
+Van den Oord et al., \textit{Conditional Image Generation with PixelCNN Decoders}, ICML 2016.
+
+\end{document}
